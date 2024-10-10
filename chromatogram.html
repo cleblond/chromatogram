@@ -9,36 +9,82 @@
             font-family: Arial, sans-serif;
             margin: 20px;
         }
-        canvas {
-            border: 1px solid #000;
-            margin: 10px 0;
+        #main-container {
+            display: flex;
+            flex-wrap: wrap;
         }
-        .controls {
+        #controls-container, #axis-controls {
+            padding: 20px;
+            margin: 10px;
+            border: 1px solid #ddd;
+            background-color: #f9f9f9;
+            max-width: 300px;
+            min-width: 250px;
+        }
+        #controls-container h3, #axis-controls h3 {
+            margin-top: 0;
+        }
+        #controls-container .peak-inputs {
             display: flex;
             flex-direction: column;
-            max-width: 300px;
+            margin-bottom: 10px;
         }
-        .controls label, .controls input {
+        #controls-container .peak-inputs label {
+            display: block;
+            margin: 5px 0 3px;
+        }
+        #axis-controls label {
             margin: 5px 0;
+        }
+        #controls-container input, #axis-controls input {
+            margin: 3px 0 10px;
+            width: 100%;
+        }
+        #canvas-container {
+            margin: 20px;
+        }
+        button {
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
     <h1>Chromatogram Simulator</h1>
-    <div class="controls">
-        <label for="numPeaks">Number of Peaks:</label>
-        <input type="number" id="numPeaks" min="1" value="1">
-        
-        <div id="peakInputs"></div>
+    <div id="main-container">
+        <div id="canvas-container">
+            <canvas id="chromatogramCanvas" width="800" height="400"></canvas>
+        </div>
+        <div id="controls-container">
+            <h3>Peak Controls</h3>
+            <label for="numPeaks">Number of Peaks:</label>
+            <input type="number" id="numPeaks" min="1" value="1">
 
-        <button id="drawChromatogram">Draw Chromatogram</button>
-        <button id="exportImage">Export Image</button>
+            <div id="peakInputs" class="peak-inputs"></div>
+
+            <button id="drawChromatogram">Draw Chromatogram</button>
+            <button id="exportImage">Export Image</button>
+        </div>
+        <div id="axis-controls">
+            <h3>Axis Scaling Controls</h3>
+            <label for="xMin">X Min (Retention Time):</label>
+            <input type="number" id="xMin" step="0.1" value="0">
+            <label for="xMax">X Max (Retention Time):</label>
+            <input type="number" id="xMax" step="0.1" value="10">
+            <label for="yMin">Y Min (Response):</label>
+            <input type="number" id="yMin" step="0.1" value="0">
+            <label for="yMax">Y Max (Response):</label>
+            <input type="number" id="yMax" step="0.1" value="1">
+        </div>
     </div>
-    <canvas id="chromatogramCanvas" width="800" height="400"></canvas>
-
-
+    <script src="app.js"></script>
 </body>
 </html>
+
+
+
+
+
+
 <script>
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -46,20 +92,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const peakInputsContainer = document.getElementById('peakInputs');
     const drawButton = document.getElementById('drawChromatogram');
     const exportButton = document.getElementById('exportImage');
+    const xMinInput = document.getElementById('xMin');
+    const xMaxInput = document.getElementById('xMax');
+    const yMinInput = document.getElementById('yMin');
+    const yMaxInput = document.getElementById('yMax');
     const canvas = document.getElementById('chromatogramCanvas');
     const ctx = canvas.getContext('2d');
 
-    numPeaksInput.addEventListener('change', () => {
-        updatePeakInputs();
-    });
+    numPeaksInput.addEventListener('change', updatePeakInputs);
+    drawButton.addEventListener('click', drawChromatogram);
+    exportButton.addEventListener('click', exportCanvasAsImage);
 
-    drawButton.addEventListener('click', () => {
-        drawChromatogram();
-    });
-
-    exportButton.addEventListener('click', () => {
-        exportCanvasAsImage();
-    });
+    // Event listeners for axis control inputs
+    xMinInput.addEventListener('change', drawChromatogram);
+    xMaxInput.addEventListener('change', drawChromatogram);
+    yMinInput.addEventListener('change', drawChromatogram);
+    yMaxInput.addEventListener('change', drawChromatogram);
 
     function updatePeakInputs() {
         peakInputsContainer.innerHTML = '';
@@ -67,24 +115,32 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = 0; i < numPeaks; i++) {
             const peakDiv = document.createElement('div');
             peakDiv.innerHTML = `
-                <h3>Peak ${i + 1}</h3>
-                <label for="retentionTime${i}">Retention Time:</label>
-                <input type="number" id="retentionTime${i}" step="0.1" value="${i * 2 + 2}">
-                <label for="area${i}">Area:</label>
-                <input type="number" id="area${i}" step="0.1" value="1">
-                <label for="width${i}">Width (Standard Deviation):</label>
-                <input type="number" id="width${i}" step="0.1" value="0.5">
+                <div>
+                    <label for="retentionTime${i}">Retention Time:</label>
+                    <input type="number" id="retentionTime${i}" step="0.1" value="${i * 2 + 2}">
+                </div>
+                <div>
+                    <label for="width${i}">Width (Standard Deviation):</label>
+                    <input type="number" id="width${i}" step="0.1" value="0.5">
+                </div>
+                <div>
+                    <label for="area${i}">Area:</label>
+                    <input type="number" id="area${i}" step="0.1" value="1">
+                </div>
             `;
+            peakDiv.style.borderBottom = '1px solid #ddd';
+            peakDiv.style.paddingBottom = '10px';
+            peakDiv.style.marginBottom = '10px';
             peakInputsContainer.appendChild(peakDiv);
         }
     }
 
     function drawChromatogram() {
+        // Reset canvas and retrieve peak data
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const numPeaks = parseInt(numPeaksInput.value);
         const peaks = [];
 
-        // Retrieve input values for each peak
         for (let i = 0; i < numPeaks; i++) {
             const retentionTime = parseFloat(document.getElementById(`retentionTime${i}`).value);
             const area = parseFloat(document.getElementById(`area${i}`).value);
@@ -92,36 +148,112 @@ document.addEventListener('DOMContentLoaded', () => {
             peaks.push({ retentionTime, area, width });
         }
 
-        // Draw each peak using a Gaussian function
-        peaks.forEach(peak => drawGaussianPeak(peak.retentionTime, peak.area, peak.width));
+        // Retrieve axis scaling values from user inputs
+        const xMin = parseFloat(xMinInput.value);
+        const xMax = parseFloat(xMaxInput.value);
+        const yMin = parseFloat(yMinInput.value);
+        const yMax = parseFloat(yMaxInput.value);
 
-        // Draw axes
-        ctx.strokeStyle = 'black';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(50, canvas.height - 50);
-        ctx.lineTo(canvas.width - 50, canvas.height - 50); // X-axis
-        ctx.moveTo(50, canvas.height - 50);
-        ctx.lineTo(50, 50); // Y-axis
-        ctx.stroke();
+        if (xMax <= xMin || yMax <= yMin) {
+            alert("Invalid axis scaling values. Please ensure that xMax > xMin and yMax > yMin.");
+            return;
+        }
+
+        // Draw each peak using Gaussian function based on the new scale
+        peaks.forEach(peak => drawGaussianPeak(peak.retentionTime, peak.area, peak.width, xMin, xMax, yMin, yMax));
+
+        // Draw axes and labels based on user-defined scaling values
+        drawAxes(xMin, xMax, yMin, yMax);
+        drawLabels();
     }
 
-    function drawGaussianPeak(mu, area, sigma) {
-        const scale = 50; // Scaling factor to fit within canvas
-        const centerX = 50 + mu * scale; // Center of the peak
-        const amplitude = area * scale; // Height of the peak
+    function drawGaussianPeak(mu, area, sigma, xMin, xMax, yMin, yMax) {
+        const scaleX = (canvas.width - 100) / (xMax - xMin); // Dynamic x scaling
+        const scaleY = (canvas.height - 100) / (yMax - yMin); // Dynamic y scaling
+
+        const centerX = 50 + (mu - xMin) * scaleX; // Center of the peak based on new x scale
+        const amplitude = (area * scaleY) / (yMax - yMin); // Height of the peak based on new y scale
 
         ctx.beginPath();
-        for (let x = 0; x < canvas.width; x++) {
-            const xValue = (x - centerX) / scale;
+
+        // Set the range for drawing to the visible canvas region, considering the new scale
+        const startX = Math.max(50, centerX - 4 * sigma * scaleX); // Left boundary
+        const endX = Math.min(canvas.width - 50, centerX + 4 * sigma * scaleX); // Right boundary
+
+        let maxPeakY = canvas.height - 50; // Initialize max y value for the peak
+
+        for (let x = startX; x <= endX; x++) {
+            const xValue = (x - centerX) / scaleX;
             const yValue = amplitude * Math.exp(-0.5 * Math.pow(xValue / sigma, 2));
-            const y = canvas.height - 50 - yValue;
-            if (x === 0) ctx.moveTo(x, y);
+            const y = canvas.height - 50 - (yValue - yMin * scaleY); // Adjust y based on new y scale and yMin
+
+            // Track the maximum y value of the peak
+            if (y < maxPeakY) maxPeakY = y;
+
+            if (x === startX) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
         ctx.strokeStyle = 'blue';
         ctx.lineWidth = 2;
         ctx.stroke();
+
+        // Draw text label indicating peak area
+        drawLabel(centerX, maxPeakY, area);
+    }
+
+    function drawLabel(x, y, area) {
+        ctx.fillStyle = 'red';
+        ctx.font = '12px Arial';
+        ctx.fillText(`Area: ${area.toFixed(2)}`, x + 10, y - 10);
+    }
+
+    function drawAxes(xMin, xMax, yMin, yMax) {
+        const scaleX = (canvas.width - 100) / (xMax - xMin); // Dynamic x scaling
+        const scaleY = (canvas.height - 100) / (yMax - yMin); // Dynamic y scaling
+
+        // Draw X and Y axes
+        ctx.strokeStyle = 'black';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(50, canvas.height - 50); // Starting point for axes (50, canvas.height - 50)
+        ctx.lineTo(canvas.width - 50, canvas.height - 50); // X-axis
+        ctx.moveTo(50, canvas.height - 50); // Starting point for Y-axis
+        ctx.lineTo(50, 50); // Y-axis
+        ctx.stroke();
+
+        // Draw ticks on X-axis based on dynamic scale
+        const xStep = (xMax - xMin) / 10;
+        for (let i = 0; i <= 10; i++) {
+            const x = 50 + i * xStep * scaleX;
+            ctx.moveTo(x, canvas.height - 50);
+            ctx.lineTo(x, canvas.height - 45);
+            ctx.stroke();
+            ctx.fillText((xMin + i * xStep).toFixed(1).toString(), x - 15, canvas.height - 30); // X-axis labels (retention time)
+        }
+
+        // Draw ticks on Y-axis based on dynamic scale
+        const yStep = (yMax - yMin) / 5;
+        for (let i = 0; i <= 5; i++) {
+            const y = canvas.height - 50 - i * yStep * scaleY;
+            ctx.moveTo(50, y);
+            ctx.lineTo(55, y);
+            ctx.stroke();
+            ctx.fillText((yMin + i * yStep).toFixed(1).toString(), 30, y + 5); // Y-axis labels (response)
+        }
+    }
+
+    function drawLabels() {
+        // Label for X-axis
+        ctx.font = '16px Arial';
+        ctx.fillStyle = 'black';
+        ctx.fillText('Retention Time (min)', canvas.width / 2 - 60, canvas.height - 10);
+
+        // Label for Y-axis (rotated)
+        ctx.save();
+        ctx.translate(10, canvas.height / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.fillText('Response', 0, 0);
+        ctx.restore();
     }
 
     function exportCanvasAsImage() {
@@ -132,7 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updatePeakInputs();
+    drawChromatogram(); // Initial draw
 });
+
 
 
 
